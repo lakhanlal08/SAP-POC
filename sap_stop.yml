@@ -1,0 +1,30 @@
+---
+# ============================================================
+# Playbook  : sap_stop.yml
+# Purpose   : Stop the SAP demo service on target host
+# Run       : ansible-playbook -i inventory.ini sap_stop.yml
+# ============================================================
+
+- name: Stop SAP Service
+  hosts: sapservers
+  become: yes
+
+  vars:
+    sap_service_name: sap
+
+  tasks:
+
+    - name: Ensure SAP service is stopped
+      systemd:
+        name: "{{ sap_service_name }}"
+        state: stopped
+
+    - name: Verify SAP is stopped
+      command: /opt/sap/status_sap.sh
+      register: sap_status_result
+      changed_when: false
+      failed_when: false
+
+    - name: Show SAP stop result
+      debug:
+        msg: "{{ sap_status_result.stdout }}"

@@ -1,0 +1,30 @@
+---
+# ============================================================
+# Playbook  : sap_start.yml
+# Purpose   : Start the SAP demo service on target host
+# Run       : ansible-playbook -i inventory.ini sap_start.yml
+# ============================================================
+
+- name: Start SAP Service
+  hosts: sapservers
+  become: yes
+
+  vars:
+    sap_service_name: sap
+
+  tasks:
+
+    - name: Ensure SAP service is started
+      systemd:
+        name: "{{ sap_service_name }}"
+        state: started
+
+    - name: Verify SAP is running
+      command: /opt/sap/status_sap.sh
+      register: sap_status_result
+      changed_when: false
+      failed_when: false
+
+    - name: Show SAP start result
+      debug:
+        msg: "{{ sap_status_result.stdout }}"

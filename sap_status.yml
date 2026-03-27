@@ -1,0 +1,45 @@
+---
+# ============================================================
+# Playbook  : sap_status.yml
+# Purpose   : Check the status of SAP service on target host
+# Run       : ansible-playbook -i inventory.ini sap_status.yml
+# ============================================================
+
+- name: Check SAP Service Status
+  hosts: sapservers
+  become: yes
+
+  vars:
+    sap_service_name: sap
+
+  tasks:
+
+    - name: Get systemd service status
+      command: systemctl status {{ sap_service_name }}
+      register: systemd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Run SAP custom status check
+      command: /opt/sap/status_sap.sh
+      register: sap_custom_status
+      changed_when: false
+      failed_when: false
+
+    - name: Show systemd status output
+      debug:
+        msg: "{{ systemd_status.stdout_lines }}"
+
+    - name: Show SAP custom status
+      debug:
+        msg: "{{ sap_custom_status.stdout }}"
+
+    - name: Show recent SAP log entries
+      command: tail -20 /var/log/sap/sap.log
+      register: sap_log
+      changed_when: false
+      failed_when: false
+
+    - name: Display SAP log
+      debug:
+        msg: "{{ sap_log.stdout_lines }}"

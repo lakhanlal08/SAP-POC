@@ -1,0 +1,117 @@
+---
+# ============================================================
+# Playbook  : sap_install.yml
+# Purpose   : Simulate SAP system installation and setup
+#             Creates a systemd-managed SAP demo service
+# Run       : ansible-playbook -i inventory.ini sap_install.yml
+# ============================================================
+
+- name: Configure SAP demo server
+  hosts: sapservers
+  become: yes
+
+  vars:
+    sap_base_dir: /opt/sap
+    sap_log_dir: /var/log/sap
+    sap_service_name: sap
+
+  tasks:
+
+    - name: Install required packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - curl
+        state: present
+        update_cache: yes
+
+    - name: Create SAP base directory
+      file:
+        path: "{{ sap_base_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create SAP log directory
+      file:
+        path: "{{ sap_log_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Deploy SAP start script
+      copy:
+        dest: "{{ sap_base_dir }}/start_sap.sh"
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          LOG="{{ sap_log_dir }}/sap.log"
+          PIDFILE=/tmp/sap_running
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAP system starting..." | tee -a "$LOG"
+          touch "$PIDFILE"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAP system started successfully. PID file: $PIDFILE" | tee -a "$LOG"
+
+    - name: Deploy SAP stop script
+      copy:
+        dest: "{{ sap_base_dir }}/stop_sap.sh"
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          LOG="{{ sap_log_dir }}/sap.log"
+          PIDFILE=/tmp/sap_running
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAP system stopping..." | tee -a "$LOG"
+          rm -f "$PIDFILE"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] SAP system stopped." | tee -a "$LOG"
+
+    - name: Deploy SAP status check script
+      copy:
+        dest: "{{ sap_base_dir }}/status_sap.sh"
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          PIDFILE=/tmp/sap_running
+          if [ -f "$PIDFILE" ]; then
+            echo "SAP Status: RUNNING (PID file present at $PIDFILE)"
+            exit 0
+          else
+            echo "SAP Status: STOPPED (PID file not found)"
+            exit 1
+          fi
+
+    - name: Deploy SAP systemd service file
+      copy:
+        dest: /etc/systemd/system/{{ sap_service_name }}.service
+        content: |
+          [Unit]
+          Description=SAP Demo Service
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart={{ sap_base_dir }}/start_sap.sh
+          ExecStop={{ sap_base_dir }}/stop_sap.sh
+          RemainAfterExit=true
+          StandardOutput=append:{{ sap_log_dir }}/sap.log
+          StandardError=append:{{ sap_log_dir }}/sap-error.log
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      command: systemctl daemon-reload
+
+    - name: Enable SAP service on boot
+      systemd:
+        name: "{{ sap_service_name }}"
+        enabled: yes
+
+    - name: Print installation summary
+      debug:
+        msg:
+          - "SAP Demo installation complete!"
+          - "SAP base dir  : {{ sap_base_dir }}"
+          - "SAP log dir   : {{ sap_log_dir }}"
+          - "Service name  : {{ sap_service_name }}"
+          - "Start script  : {{ sap_base_dir }}/start_sap.sh"
+          - "Stop script   : {{ sap_base_dir }}/stop_sap.sh"
+          - "Status script : {{ sap_base_dir }}/status_sap.sh"
